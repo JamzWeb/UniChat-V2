@@ -1,1 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>UNICHAT - Cebu Campus Chat</title>
+    <!-- Include Socket.IO client library -->
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        :root {
+            --bg-color: #000000;
+            --neon-green: #39FF14;
+            --dark-gray: #1a1a1a;
+            --muted-gray: #888888;
+            --alert-red: #FF3366;
+            --glow: 0 0 5px var(--neon-green), 0 0 10px var(--neon-green);
+            --border-radius: 20px;
+        }
 
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: #ffffff;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- Reusable Neon Components --- */
+        .neon-text {
+            color: var(--neon-green);
+            text-shadow: var(--glow);
+        }
+        
+        .neon-border {
+            border: 1px solid var(--neon-green);
+            box-shadow: var(--glow);
+        }
+
+        .btn-solid-neon {
+            background-color: var(--neon-green);
+            color: black;
+            font-weight: bold;
+            border: none;
+            border-radius: var(--border-radius);
+            padding: 10px 20px;
+            cursor: pointer;
+            box-shadow: var(--glow);
+        }
+
+        .btn-outline-neon {
+            background: transparent;
+            color: var(--neon-green);
+            border: 1px solid var(--neon-green);
+            border-radius: var(--border-radius);
+            padding: 8px 15px;
+            cursor: pointer;
+            box-shadow: var(--glow);
+            font-weight: bold;
+        }
+
+        /* --- Screens --- */
+        .screen {
+            display: none;
+            width: 100%;
+            height: 100%;
+            flex-direction: column;
+        }
+        .screen.active {
+            display: flex;
+        }
+
+        /* --- Login / Landing Screen --- */
+        #login-screen {
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        
+        .admin-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            background: none;
+            border: none;
+            color: white;
+        }
+
+        .login-box {
+            background: var(--dark-gray);
+            padding: 30px;
+            border-radius: var(--border-radius);
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .login-box h1 {
+            margin-bottom: 20px;
+            font-size: 2.5rem;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            background: black;
+            border: 1px solid #333;
+            color: white;
+            border-radius: 10px;
+        }
+        
+        .input-field:focus {
+            outline: none;
+            border-color: var(--neon-green);
+        }
+
+        select.input-field {
+            appearance: none;
+            cursor: pointer;
+        }
+
+        #admin-login-fields {
+            display: none;
+        }
+
+        /* --- Admin Dashboard Screen --- */
+        #admin-dashboard {
+            padding: 20px;
+        }
+        
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: var(--dark-gray);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-card h3 { color: var(--muted-gray); font-size: 0.9rem; }
+        .stat-card p { font-size: 2rem; font-weight: bold; margin-top: 5px; }
+
+        /* --- Chat Screen --- */
+        .chat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: var(--dark-gray);
+            border-bottom: 1px solid #333;
+        }
+
+        .online-status {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.8rem;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            border: 1px solid var(--neon-green);
+        }
+
+        .exit-btn {
+            color: var(--muted-gray);
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+
+        .match-bar {
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            background: #111;
+            font-size: 0.9rem;
+            align-items: center;
+        }
+        
+        .report-btn {
+            color: var(--alert-red);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        /* Chat Area */
+        #chat-window {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .message-wrapper {
+            display: flex;
+            flex-direction: column;
+            max-width: 80%;
+            position: relative;
+        }
+
+        .message-wrapper.sent { align-self: flex-end; }
+        .message-wrapper.received { align-self: flex-start; }
+        
+        .system-message {
+            align-self: center;
+            background: var(--dark-gray);
+            color: var(--muted-gray);
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            text-align: center;
+            max-width: 90%;
+        }
+
+        .chat-bubble {
+            padding: 12px 18px;
+            border-radius: var(--border-radius);
+            word-wrap: break-word;
+            position: relative;
+        }
+
+        /* Normal User Bubble */
+        .bubble-normal {
+            background: var(--dark-gray);
+            color: white;
+        }
+
+        /* Admin/Mod Bubble */
+        .bubble-staff {
+            background: transparent;
+            color: var(--neon-green);
+            border: 1px solid var(--neon-green);
+            box-shadow: var(--glow);
+        }
+
+        .meta-tag {
+            font-size: 0.7rem;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .message-wrapper.sent .meta-tag { justify-content: flex-end; }
+
+        .staff-badge {
+            border: 1px solid var(--neon-green);
+            border-radius: 10px;
+            padding: 2px 6px;
+            font-size: 0.65rem;
+            box-shadow: 0 0 3px var(--neon-green);
+        }
+
+        .timestamp { color: var(--muted-gray); }
+
+        /* Input Area */
+        .input-bar {
+            display: flex;
+            padding: 15px;
+            background: var(--dark-gray);
+            gap: 10px;
+            align-items: center;
+        }
+
+        .skip-btn {
+            color: var(--alert-red);
+            background: none;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        #message-input {
+            flex: 1;
+            background: black;
+            border: none;
+            border-radius: var(--border-radius);
+            padding: 12px 15px;
+            color: white;
+        }
+        #message-input:focus { outline: none; }
+
+        .typing-indicator {
+            font-size: 0.8rem;
+            color: var(--muted-gray);
+            padding-left: 20px;
+            height: 20px;
+            font-style: italic;
+        }
+        
+        /* Reaction Context Menu (Hidden by default) */
+        .reaction-menu {
+            display: none;
+            position: absolute;
+            background: var(--dark-gray);
+            border: 1px solid #333;
+            border-radius: 20px;
+            padding: 5px;
+            gap: 10px;
+            top: -35px;
+            z-index: 10;
+        }
+        .reaction-menu.active { display: flex; }
+        .reaction-emoji { cursor: pointer; font-size: 1.2rem; }
+
+        /* Reply Preview */
+        #reply-preview {
+            display: none;
+            background: #111;
+            padding: 8px 15px;
+            border-left: 3px solid var(--neon-green);
+            font-size: 0.8rem;
+            color: var(--muted-gray);
+        }
+        #reply-preview.active { display: flex; justify-content: space-between;}
+    </style>
+</head>
+<body>
+
+    <!-- 1. LOGIN / LANDING SCREEN -->
+    <div id="login-screen" class="screen active">
+        <button class="admin-toggle" onclick="toggleAdminLogin()">👑</button>
+        
+        <div class="login-box">
+            <h1 class="neon-text">UNICHAT</h1>
+            
+            <!-- Normal User Form -->
+            <div id="user-login-fields">
+                <input type="text" id="nickname" class="input-field" placeholder="Enter Nickname" maxlength="15">
+                <select id="campus-select" class="input-field">
+                    <option value="" disabled selected>Select Cebu Campus...</option>
+                    <optgroup label="── A to C ──">
+                        <option value="ACLC College - Mandaue">ACLC College - Mandaue</option>
+                        <option value="Asian College of Technology (ACT) - Cebu">ACT - Cebu</option>
+                        <option value="Cebu Institute of Technology - University (CIT-U)">CIT-U</option>
+                        <option value="Cebu Normal University (CNU) - Main">CNU - Main</option>
+                        <option value="Cebu Roosevelt Memorial Colleges (CRMC)">CRMC</option>
+                        <option value="Cebu Technological University (CTU) - Argao">CTU - Argao</option>
+                        <option value="Cebu Technological University (CTU) - Barili">CTU - Barili</option>
+                        <option value="Cebu Technological University (CTU) - Daanbantayan">CTU - Daanbantayan</option>
+                        <option value="Cebu Technological University (CTU) - Danao">CTU - Danao</option>
+                        <option value="Cebu Technological University (CTU) - Main">CTU - Main</option>
+                        <option value="Cebu Technological University (CTU) - Moalboal">CTU - Moalboal</option>
+                        <option value="Cebu Technological University (CTU) - San Francisco">CTU - San Francisco</option>
+                        <option value="Cebu Technological University (CTU) - Tuburan">CTU - Tuburan</option>
+                    </optgroup>
+                    <optgroup label="── D to S ──">
+                        <option value="Don Bosco Technical College - Cebu">Don Bosco Technical College - Cebu</option>
+                        <option value="Southwestern University (SWU) PHINMA - Cebu">SWU PHINMA - Cebu</option>
+                    </optgroup>
+                    <optgroup label="── U (Universities) ──">
+                        <option value="University of Cebu (UC) - Banilad">UC - Banilad</option>
+                        <option value="University of Cebu (UC) - Lapu-Lapu and Mandaue">UC - Lapu-Lapu and Mandaue</option>
+                        <option value="University of Cebu (UC) - Main">UC - Main</option>
+                        <option value="University of Cebu (UC) - Pardo">UC - Pardo</option>
+                        <option value="University of San Carlos (USC) - North Campus">USC - North Campus</option>
+                        <option value="University of San Carlos (USC) - South Campus">USC - South Campus</option>
+                        <option value="University of San Carlos (USC) - Talamban">USC - Talamban</option>
+                        <option value="University of San Carlos (USC) - Downtown Main">USC - Downtown Main</option>
+                        <option value="University of San Jose-Recoletos (USJ-R) - Basak">USJ-R - Basak</option>
+                        <option value="University of San Jose-Recoletos (USJ-R) - Main">USJ-R - Main</option>
+                        <option value="University of the Philippines (UP) - Cebu">UP - Cebu</option>
+                        <option value="University of the Visayas (UV) - Main">UV - Main</option>
+                    </optgroup>
+                    <optgroup label="── Others ──">
+                        <option value="Other School / Branch Around Cebu">Other School / Branch Around Cebu</option>
+                    </optgroup>
+                </select>
+                <button class="btn-solid-neon" onclick="startChat('user')" style="width: 100%; margin-top: 10px;">START MATCHING</button>
+            </div>
+
+            <!-- Admin/Mod Login Form -->
+            <div id="admin-login-fields">
+                <h3 class="neon-text" style="margin-bottom:15px; font-size:1.2rem;">Staff Login</h3>
+                <input type="text" id="staff-name" class="input-field" placeholder="Staff Name">
+                <input type="password" id="staff-pass" class="input-field" placeholder="Access Password">
+                <button class="btn-outline-neon" onclick="loginStaff()" style="width: 100%; margin-top: 10px;">ACCESS CONSOLE</button>
+            </div>
+        </div>
+        
+        <p style="position: absolute; bottom: 20px; color: var(--muted-gray); font-size: 0.8rem;">Online Users: <span id="landing-online-count" class="neon-text">0</span></p>
+    </div>
+
+    <!-- 2. ADMIN DASHBOARD SCREEN -->
+    <div id="admin-dashboard" class="screen">
+        <div class="dashboard-header">
+            <h2 class="neon-text">🛡️ Admin Console</h2>
+            <button class="exit-btn" onclick="showScreen('login-screen')">Logout</button>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Online</h3>
+                <p id="dash-online-count" class="neon-text">0</p>
+            </div>
+            <div class="stat-card">
+                <h3>Active Matches</h3>
+                <p id="dash-rooms-count" class="neon-text">0</p>
+            </div>
+        </div>
+        
+        <div style="background: var(--dark-gray); padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+            <h3 style="color: white; margin-bottom: 10px;">Reports & Feedback</h3>
+            <div id="reports-list" style="color: var(--muted-gray); font-size: 0.9rem; max-height: 150px; overflow-y:auto;">
+                No reports currently.
+            </div>
+        </div>
+
+        <button class="btn-solid-neon" onclick="startChat('staff')" style="width: 100%; margin-top: auto;">JOIN CHAT AS STAFF</button>
+    </div>
+
+    <!-- 3. ACTIVE CHAT SCREEN -->
+    <div id="chat-screen" class="screen">
+        <!-- Header -->
+        <div class="chat-header">
+            <h2 class="neon-text" style="font-size: 1.2rem;">UNICHAT</h2>
+            <div class="online-status">
+                <div class="status-dot"></div>
+                <span class="neon-text" id="chat-online-count">0</span>
+            </div>
+            <button class="exit-btn" onclick="quitSession()">Exit Session</button>
+        </div>
+
+        <!-- Match Bar -->
+        <div class="match-bar">
+            <span id="match-info">Finding a partner...</span>
+            <button class="report-btn" onclick="reportUser()" id="report-btn" style="display:none;">🚩 Report</button>
+        </div>
+
+        <!-- Chat Window -->
+        <div id="chat-window">
+            <!-- Messages go here -->
+            <div class="system-message">Welcome to UniChat. Waiting for a match...</div>
+        </div>
+        
+        <div id="typing-indicator" class="typing-indicator"></div>
+
+        <!-- Reply Preview -->
+        <div id="reply-preview">
+            <span id="reply-text">Replying to...</span>
+            <button style="background:none; border:none; color:white; cursor:pointer;" onclick="cancelReply()">✕</button>
+        </div>
+
+        <!-- Input Bar -->
+        <div class="input-bar">
+            <button class="skip-btn" onclick="skipMatch()">SKIP</button>
+            <input type="text" id="message-input" placeholder="Type a message..." oninput="handleTyping()" onkeypress="handleEnter(event)" disabled>
+            <button class="btn-solid-neon" id="send-btn" onclick="sendMessage()" disabled>SEND</button>
+        </div>
+    </div>
+
+    <script src="client.js"></script>
+</body>
+  </html>
